@@ -1,0 +1,34 @@
+{
+  "name": "knowledge-void-dashboard",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Cyberpunk 3D Knowledge Management Dashboard with SurrealDB",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "lucide-react": "^0.487.0",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "react-dnd": "^16.0.1",
+    "react-dnd-html5-backend": "^16.0.1",
+    "react-force-graph-3d": "^1.24.4",
+    "react-router": "^7.13.0",
+    "surrealdb": "^1.0.0",
+    "three": "^0.170.0",
+    "three-spritetext": "^1.10.3"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.1.12",
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "@types/three": "^0.170.0",
+    "@vitejs/plugin-react": "^4.7.0",
+    "tailwindcss": "^4.1.12",
+    "typescript": "^5.8.3",
+    "vite": "^6.3.5"
+  }
+}

@@ -1,7 +1,8 @@
 import { createBrowserRouter } from 'react-router';
-import { MainWorkspace } from './pages/MainWorkspace';
+import { Dashboard } from './pages/Dashboard';
 import { CalendarInteraction } from './pages/CalendarInteraction';
 import { DocumentIngest } from './pages/DocumentIngest';
+import { VolitionScreen } from './pages/VolitionScreen';
 import { Navigation } from './components/Navigation';
 
 function Layout({ children }: { children: React.ReactNode }) {
@@ -16,11 +17,7 @@ function Layout({ children }: { children: React.ReactNode }) {
 export const router = createBrowserRouter([
   {
     path: '/',
-    element: (
-      <Layout>
-        <MainWorkspace />
-      </Layout>
-    ),
+    element: <Dashboard />,
   },
   {
     path: '/calendar',
@@ -35,6 +32,14 @@ export const router = createBrowserRouter([
     element: (
       <Layout>
         <DocumentIngest />
+      </Layout>
+    ),
+  },
+  {
+    path: '/volition',
+    element: (
+      <Layout>
+        <VolitionScreen />
       </Layout>
     ),
   },
