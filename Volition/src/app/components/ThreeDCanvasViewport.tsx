@@ -318,19 +318,27 @@ export function ThreeDCanvasViewport({ highlightedLabel, filter, onNodeClick, on
           if (onNodeClick) onNodeClick(String(node.id));
           if (onNodeInspect) onNodeInspect(node);
           if (fgRef.current) {
-            const camPos = fgRef.current.camera().position;
-            const dx = camPos.x - node.x;
-            const dy = camPos.y - node.y;
-            const dz = camPos.z - node.z;
-            const currentDist = Math.hypot(dx, dy, dz) || 1;
-            const targetDist = 60; 
-            const newPos = {
-              x: node.x + (dx / currentDist) * targetDist,
-              y: node.y + (dy / currentDist) * targetDist,
-              z: node.z + (dz / currentDist) * targetDist
-            };
-            const currentLookAt = fgRef.current.controls().target;
-            fgRef.current.cameraPosition(newPos, currentLookAt, 1000);
+            // 1. Set a safer distance so nodes don't clip through the camera
+            const targetDist = 120; 
+            
+            // 2. Calculate the offset based on whether the banner is open
+            // If on desktop, shift the target 15% to the left to account for the 30vw banner
+            const xOffset = !isMobile ? 15 : 0; 
+
+            // 3. Command the camera to move to the new position, looking AT the node
+            fgRef.current.cameraPosition(
+              { 
+                x: node.x, 
+                y: node.y, 
+                z: node.z + targetDist 
+              }, // New camera position
+              { 
+                x: node.x - xOffset, 
+                y: node.y, 
+                z: node.z 
+              }, // What the camera should look at
+              1200 // Transition duration in ms
+            );
           }
         }}
         

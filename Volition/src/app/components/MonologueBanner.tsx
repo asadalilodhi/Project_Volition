@@ -429,7 +429,7 @@ export const MonologueBanner: React.FC<MonologueBannerProps> = ({ isZenMode, ins
                   <div className="flex items-center justify-between gap-4 pb-3 border-b border-white/10">
                     <span className="text-xs text-white/50 tracking-widest">TYPE:</span>
                     <span className="text-sm text-white font-bold border border-white/30 px-3 py-1 bg-white/5">
-                      {inspectedNode.type.toUpperCase()}
+                      {String(inspectedNode.type || inspectedNode.group || 'NODE').toUpperCase()}
                     </span>
                   </div>
                 </div>
