@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
 import { Send } from 'lucide-react';
 import { FloatingHUD } from '../components/FloatingHUD';
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
 interface Message {
   id: string;
@@ -8,6 +10,119 @@ interface Message {
   content: string;
   timestamp: Date;
 }
+
+// =========================================================================
+// ISOLATED 3D VIEWER: Will not crash React if the model fails to load.
+// It simply looks for '/Volition.glb' in your public folder.
+// =========================================================================
+const VolitionHologram = () => {
+  const mountRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!mountRef.current) return;
+
+    // 1. Setup Scene & Camera
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(45, mountRef.current.clientWidth / mountRef.current.clientHeight, 0.1, 1000);
+    camera.position.z = 5;
+
+    // 2. Setup Renderer (Transparent background!)
+    const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+    renderer.setSize(mountRef.current.clientWidth, mountRef.current.clientHeight);
+    renderer.setPixelRatio(window.devicePixelRatio);
+    mountRef.current.appendChild(renderer.domElement);
+
+    // 3. Volition Lighting & Atmosphere (The "Smokey Haze")
+    // Deep, desaturated midnight-slate fog for that infinite smokey void
+    scene.fog = new THREE.FogExp2(0x050811, 0.18); 
+
+    // Muted, dark slate-blue ambient light (absorbs into the dusty shadows)
+    const ambientLight = new THREE.AmbientLight(0x0a111c, 1.5); 
+    scene.add(ambientLight);
+    
+    // Softer white light from above to illuminate the "dusty white" without blinding glare
+    const keyLight = new THREE.DirectionalLight(0xddeeff, 2.0); 
+    keyLight.position.set(3, 5, 4); 
+    scene.add(keyLight);
+    
+    // Deep, smokey navy blue light (NOT vibrant neon) to fill the back shadows
+    const rimLight = new THREE.DirectionalLight(0x162544, 4.0); 
+    rimLight.position.set(-5, -2, -3); 
+    scene.add(rimLight);
+
+    // 4. Load the Model Safely & Force Materials
+    let model: THREE.Group;
+    const loader = new GLTFLoader();
+    loader.load(
+      '/Volition.glb',
+      (gltf) => {
+        model = gltf.scene;
+        
+        // OVERRIDE MATERIALS: Dusty White core with smokey blue shadow catching
+        model.traverse((child: any) => {
+          if (child.isMesh) {
+            child.material = new THREE.MeshStandardMaterial({
+              color: 0xc8ccce, // Dusty, slightly cool off-white/bone color
+              roughness: 0.85, // Very high roughness = dusty, matte, painted surface
+              metalness: 0.1,  // Low metalness so it looks like plaster/bone instead of chrome
+            });
+          }
+        });
+        
+        // Auto-scale and center the model
+        const box = new THREE.Box3().setFromObject(model);
+        const center = box.getCenter(new THREE.Vector3());
+        const size = box.getSize(new THREE.Vector3());
+        
+        const maxDim = Math.max(size.x, size.y, size.z);
+        const scale = 4.3 / maxDim; 
+        model.scale.set(scale, scale, scale);
+        model.position.sub(center.multiplyScalar(scale)); // Center it
+        
+        scene.add(model);
+      },
+      undefined,
+      (error) => console.error("Model failed to load, but the app survives:", error)
+    );
+
+    // 5. Animation Loop (Slow eerie spin + floating)
+    let reqId: number;
+    const animate = () => {
+      reqId = requestAnimationFrame(animate);
+      if (model) {
+        model.rotation.y += 0.003; 
+        // FIXED POSITION: Added -2.5 to push the model down so the neck is at the bottom
+        // model.position.y = (Math.sin(Date.now() * 0.001) * 0.1) - 2.5;
+      }
+      renderer.render(scene, camera);
+    };
+    animate();
+
+    // 6. Handle Browser Resize
+    const handleResize = () => {
+      if (!mountRef.current) return;
+      const width = mountRef.current.clientWidth;
+      const height = mountRef.current.clientHeight;
+      renderer.setSize(width, height);
+      camera.aspect = width / height;
+      camera.updateProjectionMatrix();
+    };
+    window.addEventListener('resize', handleResize);
+
+    // 7. Cleanup
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      cancelAnimationFrame(reqId);
+      renderer.dispose();
+      if (mountRef.current && renderer.domElement) {
+        mountRef.current.removeChild(renderer.domElement);
+      }
+    };
+  }, []);
+
+  return <div ref={mountRef} className="w-full h-full cursor-move" />;
+};
+
 
 export function VolitionScreen() {
   const [messages, setMessages] = useState<Message[]>([
@@ -89,19 +204,14 @@ export function VolitionScreen() {
 
   return (
     <div className="relative w-full h-screen overflow-hidden bg-black text-white pt-14">
-      {/* Left Area: Empty Transparent Container (70%) */}
+      {/* Left Area: Hologram Container (70%) */}
       <div className="absolute left-0 top-14 h-[calc(100vh-56px)] w-[calc(100%-320px)] flex items-center justify-center">
-        <div 
-          className="w-[90%] h-[80%] border-2 border-dashed border-white/10 flex items-center justify-center"
-        >
-          <div className="text-center">
-            <div className="font-['Syncopate'] text-sm tracking-[0.3em] text-white/20 mb-2">
-              RESERVED_SPACE
-            </div>
-            <div className="font-['Share_Tech_Mono'] text-xs text-white/10 tracking-widest">
-              [VISUALIZATION CANVAS - FUTURE IMPLEMENTATION]
-            </div>
-          </div>
+        <div className="w-[90%] h-[95%] flex items-center justify-center relative">
+          {/* Subtle glowing backdrop for the model */}
+          <div className="absolute w-[60%] h-[60%] bg-blue-500/5 blur-[120px] rounded-full pointer-events-none" />
+          
+          {/* 3D Model Injector */}
+          <VolitionHologram />
         </div>
       </div>
 
