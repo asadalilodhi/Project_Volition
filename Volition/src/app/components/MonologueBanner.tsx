@@ -9,6 +9,7 @@ import { ConfirmationActionBar } from './ConfirmationActionBar';
 import { SecondaryTagsModule } from './SecondaryTagsModule';
 import { MobileBannerSheet } from './MobileBannerSheet';
 import { Link } from 'react-router';
+import { SmartProposalCard } from './AIProposalCards';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -22,9 +23,13 @@ interface MonologueBannerProps {
   onCloseInspector?: () => void;
   isMobileBannerOpen?: boolean;
   onMobileClose?: () => void;
+  searchResults?: any[]; // <-- ADDED THIS to fix your error
+  proposals?: any[];     // <-- ADDED THIS for our new AI workflow
+  volitionMessage?: string;
+  onFinalizeProposal?: (id: string, action: 'confirm' | 'reject') => void;
 }
 
-export const MonologueBanner: React.FC<MonologueBannerProps> = ({ isZenMode, inspectedNode, onCloseInspector, isMobileBannerOpen, onMobileClose }) => {
+export const MonologueBanner: React.FC<MonologueBannerProps> = ({ isZenMode, inspectedNode, onCloseInspector, isMobileBannerOpen, onMobileClose, proposals = [], volitionMessage, onFinalizeProposal}) => {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [activeState, setActiveState] = useState<PanelState>('A');
   const [hoveredNode, setHoveredNode] = useState<number | null>(null);
@@ -36,6 +41,7 @@ export const MonologueBanner: React.FC<MonologueBannerProps> = ({ isZenMode, ins
   const [eventDateConfirmed, setEventDateConfirmed] = useState<'pending' | 'confirmed' | 'rejected'>('pending');
   const [simpleEventConfirmed, setSimpleEventConfirmed] = useState<'pending' | 'confirmed' | 'rejected'>('pending');
   const [documentConfirmed, setDocumentConfirmed] = useState<'pending' | 'confirmed' | 'rejected'>('pending');
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Auto-switch to NODE_INSPECTOR when a node is inspected
   React.useEffect(() => {
@@ -60,6 +66,76 @@ export const MonologueBanner: React.FC<MonologueBannerProps> = ({ isZenMode, ins
   
   const monthNames = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
   const dayNames = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+
+  // Helper to render the actual conversation and dynamic AI cards
+  const renderDialogueLayer = () => (
+    <div className="flex flex-col gap-6 text-sm flex-1 relative">
+      
+      {/* THE 2-SECOND TOAST WARNING */}
+      <AnimatePresence>
+        {toastMessage && (
+          <motion.div 
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="absolute top-0 left-5 right-5 z-50 bg-red-500/90 text-white text-[10px] tracking-widest font-bold py-3 px-4 border border-red-400 shadow-[0_5px_20px_rgba(255,0,0,0.4)] text-center uppercase backdrop-blur-md"
+          >
+            {toastMessage}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <div className="flex flex-col gap-2 shrink-0 pt-2">
+        <span className="text-white font-bold text-xs tracking-widest mb-1 flex items-center gap-2">
+          <Hexagon className="w-3 h-3 text-white/50 shrink-0" /> <span className="truncate">VOLITION</span>
+        </span>
+        <p className="text-white/70 leading-relaxed pl-5 border-l border-white/20 break-words">
+          {volitionMessage || "System initialization complete. Awaiting user input stream to generate neural blueprints..."}
+        </p>
+      </div>
+
+      {/* THE DYNAMIC LOOP */}
+      {proposals && proposals.length > 0 ? (
+        proposals.map((proposal: any, index: number) => (
+          <SmartProposalCard 
+            key={proposal._id} 
+            proposal={proposal} 
+            status={proposal._status} // Pass the status down!
+            onFinalize={(finalData, action) => {
+              
+              // SEQUENTIAL VALIDATION LOGIC
+              const hasPendingBefore = proposals.some((p: any, i: number) => i < index && p._status === 'pending');
+              
+              if (hasPendingBefore) {
+                 setToastMessage("SYS_ERR: RESOLVE PREVIOUS PROMPTS BEFORE PROCEEDING.");
+                 setTimeout(() => setToastMessage(null), 2500); // Hide after 2.5s
+                 return;
+              }
+
+              // If safe, execute!
+              if (onFinalizeProposal) onFinalizeProposal(proposal._id, action);
+              if (action === 'confirm') console.log("SENDING TO VOID DATABASE:", finalData);
+            }}
+          />
+        ))
+      ) : (
+        <div className="my-4 mx-5 border border-dashed border-white/20 bg-white/5 p-6 text-center shrink-0">
+          <span className="text-[10px] text-white/40 tracking-widest uppercase font-bold animate-pulse">
+            NO ACTIVE PROPOSALS IN BUFFER
+          </span>
+        </div>
+      )}
+
+      <div className="flex flex-col gap-2 items-end mt-4 opacity-50 shrink-0 pb-12">
+        <span className="text-white/60 font-bold text-xs tracking-widest mb-1 flex items-center gap-2">
+          <span className="truncate">SYSTEM</span> <Terminal className="w-3 h-3 text-white/50 shrink-0" />
+        </span>
+        <p className="text-white/90 leading-relaxed pr-5 border-r border-white/20 text-right bg-white/5 p-3 break-words max-w-full">
+          Awaiting confirmation...
+        </p>
+      </div>
+    </div>
+  );
 
   return (
     <>
@@ -186,137 +262,7 @@ export const MonologueBanner: React.FC<MonologueBannerProps> = ({ isZenMode, ins
         <div className="flex-1 overflow-y-auto overscroll-contain transform-gpu scrollbar-hide p-8 flex flex-col gap-6 relative">
           
           {/* State A: Dialogue & Inline UI Card */}
-          {activeState === 'A' && (
-            <div className="flex flex-col gap-6 text-sm flex-1">
-              <div className="flex flex-col gap-2 shrink-0">
-                <span className="text-white font-bold text-xs tracking-widest mb-1 flex items-center gap-2">
-                  <Hexagon className="w-3 h-3 text-white/50 shrink-0" /> <span className="truncate">VOLITION</span>
-                </span>
-                <p className="text-white/70 leading-relaxed pl-5 border-l border-white/20 break-words">
-                  System initialization complete. Detecting intent patterns from user input stream...
-                </p>
-              </div>
-
-              {/* [THOUGHT] Card with Modular Confirmation Bar */}
-              <div 
-                className={cn(
-                  "my-4 mx-5 border-l-4 bg-black/80 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.1),0_0_20px_rgba(0,200,255,0.15)] relative shrink-0 transition-all duration-300",
-                  thoughtConfirmed === 'confirmed' ? "border-green-500 shadow-[0_0_20px_rgba(0,255,100,0.4)]" : 
-                  thoughtConfirmed === 'rejected' ? "border-red-500 shadow-[0_0_20px_rgba(255,0,0,0.4)]" :
-                  "border-cyan-400"
-                )}
-              >
-                {/* Main Content */}
-                <div className="text-[10px] text-white/40 tracking-widest mb-2 font-bold">[ THOUGHT ]</div>
-                <p className="text-white/70 text-sm leading-relaxed italic">
-                  The neural pattern suggests a hierarchical task structure. User may benefit from nested checklist architecture within event containers.
-                </p>
-                
-                {/* Secondary Tags Module */}
-                {thoughtConfirmed === 'pending' && (
-                  <>
-                    <SecondaryTagsModule 
-                      initialTags={['ARCHITECTURE', 'NEURAL_PATTERN', 'HIERARCHY']}
-                    />
-                    
-                    {/* Confirmation Action Bar */}
-                    <ConfirmationActionBar 
-                      aiReasoning="Intent detected: User prefers structured task organization"
-                      onConfirm={() => setThoughtConfirmed('confirmed')}
-                      onReject={() => setThoughtConfirmed('rejected')}
-                    />
-                  </>
-                )}
-              </div>
-
-              <div className="flex flex-col gap-2 items-end mt-4 shrink-0">
-                <span className="text-white/60 font-bold text-xs tracking-widest mb-1 flex items-center gap-2">
-                  <span className="truncate">USER_01</span> <Terminal className="w-3 h-3 text-white/50 shrink-0" />
-                </span>
-                <p className="text-white/90 leading-relaxed pr-5 border-r border-white/20 text-right bg-white/5 p-3 break-words max-w-full">
-                  Create a task for deployment and document the architecture.
-                </p>
-              </div>
-
-              {/* [TASK] Card with Modular Confirmation */}
-              <div 
-                className={cn(
-                  "my-4 mx-5 border bg-black/80 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.1)] relative shrink-0 transition-all duration-300",
-                  taskConfirmed === 'confirmed' ? "border-green-500 shadow-[0_0_20px_rgba(0,255,100,0.4)]" : 
-                  taskConfirmed === 'rejected' ? "border-red-500 shadow-[0_0_20px_rgba(255,0,0,0.4)]" :
-                  "border-white/30"
-                )}
-              >
-                {/* Main Content */}
-                <div className="text-[10px] text-white/40 tracking-widest mb-3 font-bold">[ TASK ]</div>
-                <div className="flex items-start gap-3 mb-2">
-                  <div className="w-5 h-5 border border-white/40 mt-0.5 shrink-0" />
-                  <span className="text-sm text-white/90 font-bold">Deploy system updates to production environment</span>
-                </div>
-                
-                {/* Secondary Tags Module & Confirmation */}
-                {taskConfirmed === 'pending' && (
-                  <>
-                    <SecondaryTagsModule 
-                      initialTags={['DEPLOYMENT', 'PRODUCTION', 'SYSTEM_UPDATE']}
-                    />
-                    <ConfirmationActionBar 
-                      aiReasoning="Task detected: Deployment workflow identified"
-                      onConfirm={() => setTaskConfirmed('confirmed')}
-                      onReject={() => setTaskConfirmed('rejected')}
-                    />
-                  </>
-                )}
-              </div>
-
-              {/* [DOCUMENT] Card */}
-              <div 
-                className={cn(
-                  "my-4 mx-5 border bg-black/80 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.1),0_0_20px_rgba(200,0,255,0.1)] relative shrink-0 transition-all duration-300",
-                  documentConfirmed === 'confirmed' ? "border-green-500 shadow-[0_0_20px_rgba(0,255,100,0.4)]" : 
-                  documentConfirmed === 'rejected' ? "border-red-500 shadow-[0_0_20px_rgba(255,0,0,0.4)]" :
-                  "border-purple-500/50"
-                )}
-              >
-                {/* Main Content */}
-                <div className="flex items-center justify-between mb-3">
-                  <div className="text-[10px] text-purple-400 tracking-widest font-bold">[ DOCUMENT ]</div>
-                  <FileText className="w-4 h-4 text-purple-400" />
-                </div>
-                <div className="mb-3">
-                  <div className="text-sm text-white/90 font-bold mb-1">System Architecture Overview</div>
-                  <div className="text-[10px] text-white/50">Long-form text content detected</div>
-                </div>
-                <div className="flex items-center justify-between text-[10px] text-white/40 border-t border-white/10 pt-2 mb-2">
-                  <span>SIZE: 4.2KB</span>
-                  <span>LIMIT: 100KB</span>
-                </div>
-
-                {/* Secondary Tags Module & Confirmation */}
-                {documentConfirmed === 'pending' && (
-                  <>
-                    <SecondaryTagsModule 
-                      initialTags={['ARCHITECTURE', 'DOCUMENTATION', 'TECHNICAL']}
-                    />
-                    <ConfirmationActionBar 
-                      aiReasoning="Document detected: System architecture overview"
-                      onConfirm={() => setDocumentConfirmed('confirmed')}
-                      onReject={() => setDocumentConfirmed('rejected')}
-                    />
-                  </>
-                )}
-              </div>
-
-              <div className="flex flex-col gap-2 items-end mt-4 opacity-50 shrink-0 pb-12">
-                <span className="text-white/60 font-bold text-xs tracking-widest mb-1 flex items-center gap-2">
-                  <span className="truncate">USER_01</span> <Terminal className="w-3 h-3 text-white/50 shrink-0" />
-                </span>
-                <p className="text-white/90 leading-relaxed pr-5 border-r border-white/20 text-right bg-white/5 p-3 break-words max-w-full">
-                  Standby.
-                </p>
-              </div>
-            </div>
-          )}
+          {activeState === 'A' && renderDialogueLayer()}
 
           {/* State B: Memory Retrieval (Terminal List) */}
           {activeState === 'B' && (
@@ -553,131 +499,7 @@ export const MonologueBanner: React.FC<MonologueBannerProps> = ({ isZenMode, ins
             {/* Scrollable Content - Same as Desktop */}
             <div className="p-4 flex flex-col gap-6">
               {/* State A: Dialogue & Inline UI Card */}
-              {activeState === 'A' && (
-                <div className="flex flex-col gap-6 text-sm flex-1">
-                  <div className="flex flex-col gap-2 shrink-0">
-                    <span className="text-white font-bold text-xs tracking-widest mb-1 flex items-center gap-2">
-                      <Hexagon className="w-3 h-3 text-white/50 shrink-0" /> <span className="truncate">VOLITION</span>
-                    </span>
-                    <p className="text-white/70 leading-relaxed pl-5 border-l border-white/20 break-words">
-                      System initialization complete. Detecting intent patterns from user input stream...
-                    </p>
-                  </div>
-
-                  {/* [THOUGHT] Card with Modular Confirmation Bar */}
-                  <div 
-                    className={cn(
-                      "border-l-4 bg-black/80 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.1),0_0_20px_rgba(0,200,255,0.15)] relative shrink-0 transition-all duration-300",
-                      thoughtConfirmed === 'confirmed' ? "border-green-500 shadow-[0_0_20px_rgba(0,255,100,0.4)]" : 
-                      thoughtConfirmed === 'rejected' ? "border-red-500 shadow-[0_0_20px_rgba(255,0,0,0.4)]" :
-                      "border-cyan-400"
-                    )}
-                  >
-                    {/* Main Content */}
-                    <div className="text-[10px] text-white/40 tracking-widest mb-2 font-bold">[ THOUGHT ]</div>
-                    <p className="text-white/70 text-sm leading-relaxed italic">
-                      The neural pattern suggests a hierarchical task structure. User may benefit from nested checklist architecture within event containers.
-                    </p>
-                    
-                    {/* Secondary Tags Module */}
-                    {thoughtConfirmed === 'pending' && (
-                      <>
-                        <SecondaryTagsModule 
-                          initialTags={['ARCHITECTURE', 'NEURAL_PATTERN', 'HIERARCHY']}
-                        />
-                        
-                        {/* Confirmation Action Bar */}
-                        <ConfirmationActionBar 
-                          aiReasoning="Intent detected: User prefers structured task organization"
-                          onConfirm={() => setThoughtConfirmed('confirmed')}
-                          onReject={() => setThoughtConfirmed('rejected')}
-                        />
-                      </>
-                    )}
-                  </div>
-
-                  <div className="flex flex-col gap-2 items-end mt-4 shrink-0">
-                    <span className="text-white/60 font-bold text-xs tracking-widest mb-1 flex items-center gap-2">
-                      <span className="truncate">USER_01</span> <Terminal className="w-3 h-3 text-white/50 shrink-0" />
-                    </span>
-                    <p className="text-white/90 leading-relaxed pr-5 border-r border-white/20 text-right bg-white/5 p-3 break-words max-w-full">
-                      Create a task for deployment and document the architecture.
-                    </p>
-                  </div>
-
-                  {/* [TASK] Card with Modular Confirmation */}
-                  <div 
-                    className={cn(
-                      "border bg-black/80 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.1)] relative shrink-0 transition-all duration-300",
-                      taskConfirmed === 'confirmed' ? "border-green-500 shadow-[0_0_20px_rgba(0,255,100,0.4)]" : 
-                      taskConfirmed === 'rejected' ? "border-red-500 shadow-[0_0_20px_rgba(255,0,0,0.4)]" :
-                      "border-white/30"
-                    )}
-                  >
-                    {/* Main Content */}
-                    <div className="text-[10px] text-white/40 tracking-widest mb-3 font-bold">[ TASK ]</div>
-                    <div className="flex items-start gap-3 mb-2">
-                      <div className="w-5 h-5 border border-white/40 mt-0.5 shrink-0" />
-                      <span className="text-sm text-white/90 font-bold">Deploy system updates to production environment</span>
-                    </div>
-                    
-                    {/* Secondary Tags Module & Confirmation */}
-                    {taskConfirmed === 'pending' && (
-                      <>
-                        <SecondaryTagsModule 
-                          initialTags={['DEPLOYMENT', 'PRODUCTION', 'SYSTEM_UPDATE']}
-                        />
-                        <ConfirmationActionBar 
-                          aiReasoning="Task detected: Deployment workflow identified"
-                          onConfirm={() => setTaskConfirmed('confirmed')}
-                          onReject={() => setTaskConfirmed('rejected')}
-                        />
-                      </>
-                    )}
-                  </div>
-
-                  {/* [DOCUMENT] Card */}
-                  <div 
-                    className={cn(
-                      "border bg-black/80 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.1),0_0_20px_rgba(200,0,255,0.1)] relative shrink-0 transition-all duration-300",
-                      documentConfirmed === 'confirmed' ? "border-green-500 shadow-[0_0_20px_rgba(0,255,100,0.4)]" : 
-                      documentConfirmed === 'rejected' ? "border-red-500 shadow-[0_0_20px_rgba(255,0,0,0.4)]" :
-                      "border-purple-500/50"
-                    )}
-                  >
-                    {/* Main Content */}
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="text-[10px] text-purple-400 tracking-widest font-bold">[ DOCUMENT ]</div>
-                      <FileText className="w-4 h-4 text-purple-400" />
-                    </div>
-                    <div className="mb-3">
-                      <div className="text-sm text-white/90 font-bold mb-1">System Architecture Overview</div>
-                      <div className="text-[10px] text-white/50">Long-form text content detected</div>
-                    </div>
-                    <div className="flex items-center justify-between text-[10px] text-white/40 border-t border-white/10 pt-2 mb-2">
-                      <span>SIZE: 4.2KB</span>
-                      <span>LIMIT: 100KB</span>
-                    </div>
-
-                    {/* Secondary Tags Module & Confirmation */}
-                    {documentConfirmed === 'pending' && (
-                      <>
-                        <SecondaryTagsModule 
-                          initialTags={['ARCHITECTURE', 'DOCUMENTATION', 'TECHNICAL']}
-                        />
-                        <ConfirmationActionBar 
-                          aiReasoning="Document detected: System architecture overview"
-                          onConfirm={() => setDocumentConfirmed('confirmed')}
-                          onReject={() => setDocumentConfirmed('rejected')}
-                        />
-                      </>
-                    )}
-                  </div>
-
-                  {/* Bottom padding for scroll */}
-                  <div className="h-20" />
-                </div>
-              )}
+              {activeState === 'A' && renderDialogueLayer()}
 
               {/* State B: Memory Retrieval (Terminal List) */}
               {activeState === 'B' && (

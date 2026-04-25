@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, Activity } from 'lucide-react';
-import { cn } from '../../lib/utils';
+import { cn } from './ui/utils';
 
 interface MobileBannerSheetProps {
   isOpen: boolean;

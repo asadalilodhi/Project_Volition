@@ -1,11 +1,16 @@
 import { motion, AnimatePresence } from 'motion/react';
-import { useState, useEffect } from 'react';
 
 interface FloatingHUDProps {
   value?: string;
   onChange?: (value: string) => void;
   placeholder?: string;
   showOfflineIndicator?: boolean;
+  onExecute?: (value: string) => void; 
+  isProposing?: boolean;               
+  needsTime?: boolean;           // <-- Added this
+  onCancelTime?: () => void;     // <-- Added this
+  viewMode?: 'COMMAND_HUD' | 'NEURAL_MAP';                     // <-- Brought over from BottomHUD
+  setViewMode?: (mode: 'COMMAND_HUD' | 'NEURAL_MAP') => void;  // <-- Brought over from BottomHUD
 }
 
 export function FloatingHUD({
@@ -13,31 +18,29 @@ export function FloatingHUD({
   onChange,
   placeholder = 'QUERY_THE_VOID...',
   showOfflineIndicator = true,
+  onExecute,                           
+  isProposing,                          
+  needsTime = false,             // <-- Added this
+  onCancelTime,                  // <-- Added this
+  viewMode = 'COMMAND_HUD',      // <-- Default from BottomHUD
+  setViewMode                    // <-- From BottomHUD
 }: FloatingHUDProps) {
-  const [showCalendarConfirm, setShowCalendarConfirm] = useState(false);
-
-  // Auto-detect time/date patterns in the input
-  useEffect(() => {
-    const timeRegex = /(sunday|monday|tuesday|wednesday|thursday|friday|saturday|\d{1,2}\s?(am|pm|:\d{2}))/i;
-    if (value.length > 3 && timeRegex.test(value)) {
-      setShowCalendarConfirm(true);
-    } else {
-      setShowCalendarConfirm(false);
-    }
-  }, [value]);
+  
+  // Look! No more regex. The UI is 100% controlled by Gemini now.
+  const showCalendarConfirm = needsTime;
 
   const handleConfirm = () => {
-    setShowCalendarConfirm(false);
-    onChange?.('');
+    // TODO: We will wire this to send the confirmed time later
+    onCancelTime?.();
   };
 
   const handleCancel = () => {
-    setShowCalendarConfirm(false);
-    onChange?.('');
+    onCancelTime?.();
   };
 
   return (
-    <div className="fixed bottom-12 left-1/2 -translate-x-1/2 z-30 flex flex-col items-center w-[600px]">
+    <div className="fixed bottom-12 left-1/2 -translate-x-1/2 z-30 flex flex-col items-center w-[600px] pointer-events-auto">
+      
       {/* Offline Indicator & Status */}
       {showOfflineIndicator && (
         <div className="flex items-center gap-2 mb-3 text-[10px] text-[#666] tracking-widest uppercase font-['Share_Tech_Mono'] mr-auto w-full">
@@ -73,21 +76,22 @@ export function FloatingHUD({
               </div>
               <div className="p-6">
                 <p className="text-white text-sm font-['Share_Tech_Mono'] mb-6 tracking-wider uppercase">
-                  CONFIRM EVENT SCHEDULING: <br/>
-                  <span className="text-[#aaa]">{value}</span>
+                  MISSING EXACT TIME PARAMETERS. <br/>
+                  <span className="text-[#aaa]">Please confirm exact Date/Time for: "{value}"</span>
                 </p>
+                {/* We will eventually put a real datetime picker here! */}
                 <div className="flex gap-4">
                   <button
                     onClick={handleConfirm}
                     className="flex-1 px-6 py-3 border border-[#444] bg-white text-black font-['Syncopate'] text-xs font-bold tracking-widest hover:bg-[#ccc] transition-colors"
                   >
-                    YES // CONFIRM
+                    CONFIRM TIME
                   </button>
                   <button
                     onClick={handleCancel}
                     className="flex-1 px-6 py-3 border border-[#444] text-white font-['Syncopate'] text-xs font-bold tracking-widest hover:bg-[#222] transition-colors"
                   >
-                    NO // ABORT
+                    ABORT
                   </button>
                 </div>
               </div>
@@ -110,23 +114,50 @@ export function FloatingHUD({
             type="text"
             value={value}
             onChange={(e) => onChange?.(e.target.value)}
-            placeholder={placeholder}
-            className="flex-1 bg-transparent px-4 text-sm text-white placeholder:text-[#555] outline-none font-['Share_Tech_Mono'] tracking-widest uppercase"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                onExecute?.(value);
+                // We DON'T clear the input immediately if it's an Event needing time, 
+                // so the user still sees their text while picking the date!
+                if (!needsTime) onChange?.(''); 
+              }
+            }}
+            placeholder={
+              isProposing ? "AWAITING FAST BRAIN..." : 
+              viewMode === 'NEURAL_MAP' ? "SEARCH_NODE_HASH..." : placeholder
+            }
+            disabled={isProposing}
+            className="flex-1 bg-transparent px-4 text-sm text-white placeholder:text-[#555] outline-none font-['Share_Tech_Mono'] tracking-widest uppercase disabled:opacity-50"
           />
           
-          <button className="h-full px-6 bg-white text-black font-['Syncopate'] text-xs font-bold tracking-widest hover:bg-[#ccc] transition-colors border-l border-[#333]">
+          <button 
+            onClick={() => {
+              onExecute?.(value);
+              if (!needsTime) onChange?.('');
+            }}
+            disabled={isProposing}
+            className="h-full px-6 bg-white text-black font-['Syncopate'] text-xs font-bold tracking-widest hover:bg-[#ccc] transition-colors border-l border-[#333] disabled:opacity-50 cursor-pointer"
+          >
             EXECUTE
           </button>
         </div>
       </div>
 
-      {/* Decorative dashed line below */}
-      <div className="mt-4 flex items-center gap-4 text-[#444] text-[10px] tracking-widest font-['Share_Tech_Mono']">
-        <div className="border border-dashed border-[#0066ff] px-2 py-0.5 text-[#0066ff]">
-          COMMAND_HUD
-        </div>
-        <span>||</span>
-        <span>NEURAL_MAP</span>
+      {/* Interactive Mode Toggles (Ported from BottomHUD!) */}
+      <div className="mt-4 flex items-center gap-6 text-xs font-bold tracking-[0.2em] text-white/40 bg-black/40 px-6 py-2 border border-white/10 backdrop-blur-md">
+        <button 
+          className={`transition-colors cursor-pointer ${viewMode === 'COMMAND_HUD' ? "text-white drop-shadow-[0_0_5px_rgba(255,255,255,0.8)]" : "hover:text-white"}`}
+          onClick={() => setViewMode?.('COMMAND_HUD')}
+        >
+          [ COMMAND_HUD ]
+        </button>
+        <span className="text-white/20">||</span>
+        <button 
+          className={`transition-colors cursor-pointer ${viewMode === 'NEURAL_MAP' ? "text-white drop-shadow-[0_0_5px_rgba(255,255,255,0.8)]" : "hover:text-white"}`}
+          onClick={() => setViewMode?.('NEURAL_MAP')}
+        >
+          [ NEURAL_MAP ]
+        </button>
       </div>
     </div>
   );

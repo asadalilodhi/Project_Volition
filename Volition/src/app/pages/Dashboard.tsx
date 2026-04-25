@@ -19,9 +19,60 @@ export function Dashboard() {
   const [inspectedNode, setInspectedNode] = useState<any>(null);
   const [isMobileBannerOpen, setIsMobileBannerOpen] = useState(false);
   const [isMobileHeaderExpanded, setIsMobileHeaderExpanded] = useState(false);
+  const [proposedNodes, setProposedNodes] = useState<any[]>([]);
+  const [isProposing, setIsProposing] = useState(false);
+  const [needsTimeClarification, setNeedsTimeClarification] = useState(false);
+  const [volitionMessage, setVolitionMessage] = useState("System initialization complete. Awaiting user input stream to generate neural blueprints...");
  
 
   const isZenMode = viewMode === 'NEURAL_MAP';
+
+  // NEW: The function that triggers Phase 1 of the Handshake
+  const handleCommandExecute = async (commandText: string) => {
+    if (!commandText.trim()) return;
+    
+    setIsProposing(true);
+    console.log("Transmitting to Fast Brain...");
+
+    try {
+      const response = await fetch('http://localhost:5005/api/propose', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ command: commandText }),
+      });
+
+      const data = await response.json();
+      
+      if (data.success) {
+        console.log("🧠 Fast Brain Payload:", data);
+        
+        // FIX: Append new proposals with a unique ID and 'pending' status!
+        const newProposals = data.proposals.map((p: any) => ({
+           ...p, 
+           _id: Math.random().toString(36).substr(2, 9), 
+           _status: 'pending' 
+        }));
+        
+        setProposedNodes(prev => [...prev, ...newProposals]);
+        
+        if (data.message) setVolitionMessage(data.message); 
+        setIsMobileBannerOpen(true); 
+      } else {
+        console.error("System Error:", data.error);
+      }
+    } catch (error) {
+      console.error("Network Error: Is the Brain Stem running?", error);
+    } finally {
+      setIsProposing(false);
+    }
+  };
+
+  // This updates the status of a card when confirmed/rejected
+  const handleFinalizeProposal = (id: string, action: 'confirm' | 'reject') => {
+    setProposedNodes(prev => prev.map(node => 
+      node._id === id ? { ...node, _status: action === 'confirm' ? 'confirmed' : 'rejected' } : node
+    ));
+  };
 
   const handleNodeClick = (nodeId: string) => {
     setSearchNodeId(nodeId);
@@ -52,7 +103,7 @@ export function Dashboard() {
   const executeSearch = async () => {
     if (!searchQuery) return;
     try {
-      const res = await fetch(`http://localhost:5000/api/search?q=${searchQuery}`);
+      const res = await fetch(`http://localhost:5005/api/search?q=${searchQuery}`);
       const data = await res.json();
       setSearchResults(data);
       setIsMobileBannerOpen(true);
@@ -263,13 +314,23 @@ export function Dashboard() {
       {/* LAYER 2: BOTTOM HUD & BANNER               */}
       {/* ========================================== */}
       <div className="absolute inset-0 z-30 pointer-events-none">
+        
+        {/* We use BottomHUD to handle standard input and view toggling */}
         <BottomHUD
           viewMode={viewMode}
           setViewMode={setViewMode}
           searchQuery={searchQuery}
           setSearchQuery={setSearchQuery}
-          onExecute={executeSearch}
+          onExecute={(val) => {
+            if (viewMode === 'COMMAND_HUD') {
+              handleCommandExecute(val); 
+            } else {
+              executeSearch(); 
+            }
+          }}
         />
+
+        {/* We pass the AI's data directly to the banner to render our custom cards */}
         <MonologueBanner
           isZenMode={isZenMode}
           inspectedNode={inspectedNode}
@@ -277,6 +338,10 @@ export function Dashboard() {
           isMobileBannerOpen={isMobileBannerOpen}
           onMobileClose={() => setIsMobileBannerOpen(false)}
           searchResults={searchResults}
+          
+          proposals={proposedNodes}
+          volitionMessage={volitionMessage}
+          onFinalizeProposal={handleFinalizeProposal}  
         />
       </div>
 
